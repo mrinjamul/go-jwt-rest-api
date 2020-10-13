@@ -11,27 +11,11 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
-	"github.com/lib/pq"
+	"github.com/mrinjamul/go-jwt-rest-api/driver"
+	"github.com/mrinjamul/go-jwt-rest-api/models"
 	"github.com/subosito/gotenv"
 	"golang.org/x/crypto/bcrypt"
 )
-
-// User struct
-type User struct {
-	ID       int    `json:"id"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-// JWT struct
-type JWT struct {
-	Token string `json:"token"`
-}
-
-// Error Struct
-type Error struct {
-	Message string `json:"message"`
-}
 
 var db *sql.DB
 
@@ -40,27 +24,7 @@ func init() {
 }
 
 func main() {
-
-	pgURL, err := pq.ParseURL(os.Getenv("ELEPHANTSQL_URL"))
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	db, err = sql.Open("postgres", pgURL)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = db.Ping()
-
-	if err != nil {
-		log.Fatal(err)
-	} else {
-		log.Println("database connection established")
-	}
-
+	db, _ = driver.ConnectDB()
 	router := mux.NewRouter()
 	router.HandleFunc("/signup", signup).Methods("POST")
 	router.HandleFunc("/login", login).Methods("POST")
@@ -68,14 +32,14 @@ func main() {
 
 	log.Println("Listen on port 8000...")
 
-	err = http.ListenAndServe(":8000", router)
+	err := http.ListenAndServe(":8000", router)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func respondWithError(w http.ResponseWriter, status int, error Error) {
+func respondWithError(w http.ResponseWriter, status int, error models.Error) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(error)
 }
@@ -85,8 +49,8 @@ func responseJSON(w http.ResponseWriter, data interface{}) {
 }
 
 func signup(w http.ResponseWriter, r *http.Request) {
-	var user User
-	var errors Error
+	var user models.User
+	var errors models.Error
 
 	json.NewDecoder(r.Body).Decode(&user)
 
@@ -123,7 +87,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	responseJSON(w, user)
 }
 
-func generateToken(user User) (string, error) {
+func generateToken(user models.User) (string, error) {
 	var err error
 	secret := os.Getenv("SECRET")
 	// header.payload.secret
@@ -143,9 +107,9 @@ func generateToken(user User) (string, error) {
 
 func login(w http.ResponseWriter, r *http.Request) {
 
-	var user User
-	var jwt JWT
-	var errors Error
+	var user models.User
+	var jwt models.JWT
+	var errors models.Error
 
 	json.NewDecoder(r.Body).Decode(&user)
 
@@ -200,7 +164,7 @@ func protectedEndpoint(w http.ResponseWriter, r *http.Request) {
 // TokenVerifyMiddleWare protected handle
 func TokenVerifyMiddleWare(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var errorObject Error
+		var errorObject models.Error
 		authHeader := r.Header.Get("Authorization")
 		bearerToken := strings.Split(authHeader, " ")
 		if len(bearerToken) == 2 {
