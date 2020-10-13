@@ -11,7 +11,7 @@ import (
 var db *sql.DB
 
 // ConnectDB returns database
-func ConnectDB() (*sql.DB, error) {
+func ConnectDB() *sql.DB {
 
 	pgURL, err := pq.ParseURL(os.Getenv("ELEPHANTSQL_URL"))
 
@@ -32,5 +32,5 @@ func ConnectDB() (*sql.DB, error) {
 	} else {
 		log.Println("database connection established")
 	}
-	return db, nil
+	return db
 }
