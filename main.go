@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"github.com/lib/pq"
@@ -138,7 +138,7 @@ func generateToken(user User) (string, error) {
 func login(w http.ResponseWriter, r *http.Request) {
 
 	var user User
-	// var jwt JWT
+	var jwt JWT
 	var errors Error
 
 	json.NewDecoder(r.Body).Decode(&user)
@@ -155,7 +155,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// password := user.Password
+	password := user.Password
 	row := db.QueryRow("select * from users where email=$1", user.Email)
 	err := row.Scan(&user.ID, &user.Email, &user.Password)
 	if err != nil {
@@ -167,13 +167,23 @@ func login(w http.ResponseWriter, r *http.Request) {
 		log.Fatalln(err)
 	}
 
-	spew.Dump(user)
+	hashedPassword := user.Password
 
-	// token, err := generateToken(user)
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
-	// fmt.Println(token)
+	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	if err != nil {
+		errors.Message = "Invalid Password"
+		respondWithError(w, http.StatusUnauthorized, errors)
+		return
+	}
+
+	token, err := generateToken(user)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	w.WriteHeader(http.StatusOK)
+	jwt.Token = token
+
+	responseJSON(w, jwt)
 }
 
 func protectedEndpoint(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +193,37 @@ func protectedEndpoint(w http.ResponseWriter, r *http.Request) {
 
 // TokenVerifyMiddleWare protected handle
 func TokenVerifyMiddleWare(next http.HandlerFunc) http.HandlerFunc {
-	// fmt.Println("TokenVerifyMiddleWare invoked...")
-	return nil
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var errorObject Error
+		authHeader := r.Header.Get("Authorization")
+		bearerToken := strings.Split(authHeader, " ")
+		if len(bearerToken) == 2 {
+			authToken := bearerToken[1]
+
+			token, error := jwt.Parse(authToken, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("There was an error")
+				}
+				return []byte("secret"), nil
+			})
+
+			if error != nil {
+				errorObject.Message = error.Error()
+				respondWithError(w, http.StatusUnauthorized, errorObject)
+				return
+			}
+
+			if token.Valid {
+				next.ServeHTTP(w, r)
+			} else {
+				errorObject.Message = error.Error()
+				respondWithError(w, http.StatusUnauthorized, errorObject)
+				return
+			}
+		} else {
+			errorObject.Message = "Invalid Token."
+			respondWithError(w, http.StatusUnauthorized, errorObject)
+			return
+		}
+	})
 }
