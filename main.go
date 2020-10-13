@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mrinjamul/go-jwt-rest-api/driver"
 	"github.com/mrinjamul/go-jwt-rest-api/models"
+	"github.com/mrinjamul/go-jwt-rest-api/utils"
 	"github.com/subosito/gotenv"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -39,15 +40,6 @@ func main() {
 	}
 }
 
-func respondWithError(w http.ResponseWriter, status int, error models.Error) {
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(error)
-}
-
-func responseJSON(w http.ResponseWriter, data interface{}) {
-	json.NewEncoder(w).Encode(data)
-}
-
 func signup(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 	var errors models.Error
@@ -56,13 +48,13 @@ func signup(w http.ResponseWriter, r *http.Request) {
 
 	if user.Email == "" {
 		errors.Message = "Email is missing."
-		respondWithError(w, http.StatusBadRequest, errors)
+		utils.RespondWithError(w, http.StatusBadRequest, errors)
 		return
 	}
 
 	if user.Password == "" {
 		errors.Message = "Password is missing."
-		respondWithError(w, http.StatusBadRequest, errors)
+		utils.RespondWithError(w, http.StatusBadRequest, errors)
 		return
 	}
 
@@ -78,13 +70,13 @@ func signup(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		errors.Message = "Server error"
-		respondWithError(w, http.StatusInternalServerError, errors)
+		utils.RespondWithError(w, http.StatusInternalServerError, errors)
 		return
 	}
 
 	user.Password = ""
 	w.Header().Set("Content-Type", "application/json")
-	responseJSON(w, user)
+	utils.ResponseJSON(w, user)
 }
 
 func generateToken(user models.User) (string, error) {
@@ -115,13 +107,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	if user.Email == "" {
 		errors.Message = "Email is missing."
-		respondWithError(w, http.StatusBadRequest, errors)
+		utils.RespondWithError(w, http.StatusBadRequest, errors)
 		return
 	}
 
 	if user.Password == "" {
 		errors.Message = "Password is missing."
-		respondWithError(w, http.StatusBadRequest, errors)
+		utils.RespondWithError(w, http.StatusBadRequest, errors)
 		return
 	}
 
@@ -131,7 +123,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			errors.Message = "The user does not exist"
-			respondWithError(w, http.StatusBadRequest, errors)
+			utils.RespondWithError(w, http.StatusBadRequest, errors)
 			return
 		}
 		log.Fatalln(err)
@@ -142,7 +134,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
 		errors.Message = "Invalid Password"
-		respondWithError(w, http.StatusUnauthorized, errors)
+		utils.RespondWithError(w, http.StatusUnauthorized, errors)
 		return
 	}
 
@@ -153,7 +145,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	jwt.Token = token
 
-	responseJSON(w, jwt)
+	utils.ResponseJSON(w, jwt)
 }
 
 func protectedEndpoint(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +171,7 @@ func TokenVerifyMiddleWare(next http.HandlerFunc) http.HandlerFunc {
 
 			if error != nil {
 				errorObject.Message = error.Error()
-				respondWithError(w, http.StatusUnauthorized, errorObject)
+				utils.RespondWithError(w, http.StatusUnauthorized, errorObject)
 				return
 			}
 
@@ -187,12 +179,12 @@ func TokenVerifyMiddleWare(next http.HandlerFunc) http.HandlerFunc {
 				next.ServeHTTP(w, r)
 			} else {
 				errorObject.Message = error.Error()
-				respondWithError(w, http.StatusUnauthorized, errorObject)
+				utils.RespondWithError(w, http.StatusUnauthorized, errorObject)
 				return
 			}
 		} else {
 			errorObject.Message = "Invalid Token."
-			respondWithError(w, http.StatusUnauthorized, errorObject)
+			utils.RespondWithError(w, http.StatusUnauthorized, errorObject)
 			return
 		}
 	})
